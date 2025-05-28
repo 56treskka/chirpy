@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/56treskka/chirpy/internal/auth"
 	"github.com/56treskka/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -25,9 +26,20 @@ func (cfg *apiConfig) handlerChirpCreate(w http.ResponseWriter, r *http.Request)
 		UserID uuid.UUID `json:"user_id"`
 	}
 
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid or missing token", err)
+		return
+	}
+	userID, err := auth.ValidateJWT(tokenString, cfg.tokenSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid token", err)
+		return
+	}
+
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Something went wrong", err)
 		return
@@ -42,7 +54,7 @@ func (cfg *apiConfig) handlerChirpCreate(w http.ResponseWriter, r *http.Request)
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body: cleaned,
 		UserID: uuid.NullUUID{
-			UUID:  params.UserID,
+			UUID:  userID,
 			Valid: true,
 		},
 	})
